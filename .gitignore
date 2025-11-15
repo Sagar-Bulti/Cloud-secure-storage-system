@@ -1,0 +1,39 @@
+# Environment variables
+.env
+*.env
+
+# Python cache
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Encryption keys (will be generated on Render)
+keys/*.pem
+keys/*.key
+
+# User uploaded files
+storage_files/
+local_store/
+temp/
+
+# Database files (will be recreated on Render)
+db/*.json
+!db/.gitkeep
+
+# Backups
+backups/
+
+# Test results
+.pytest_cache/
+htmlcov/
+.coverage
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
