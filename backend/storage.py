@@ -1,8 +1,6 @@
 import os, json, datetime
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
-import resend
-
 
 # ---------------- Load Environment ----------------
 BASE_DIR = os.path.dirname(__file__)   # define BASE_DIR again
@@ -15,9 +13,14 @@ SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 OTP_EXPIRY = int(os.getenv("OTP_EXPIRY", 180))  # must be OTP_EXPIRY in .env
 
-# Configure Resend
-if RESEND_API_KEY:
-    resend.api_key = RESEND_API_KEY
+# Import and configure Resend only if needed
+try:
+    import resend
+    if RESEND_API_KEY:
+        resend.api_key = RESEND_API_KEY
+except ImportError:
+    resend = None
+    print("⚠️ Resend package not installed")
 
 # ---------------- Paths ----------------
 USERS_FILE = os.path.join(BASE_DIR, "..", "db", "users.json")
