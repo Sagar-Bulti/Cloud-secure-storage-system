@@ -1,8 +1,7 @@
-import os, json, datetime, smtplib
+import os, json, datetime
 from cryptography.fernet import Fernet
-from email.mime.text import MIMEText
 from dotenv import load_dotenv
-from email.message import EmailMessage
+import resend
 
 
 # ---------------- Load Environment ----------------
@@ -10,10 +9,15 @@ BASE_DIR = os.path.dirname(__file__)   # define BASE_DIR again
 load_dotenv()  # loads .env from project root automatically
 
 EMAIL_USER = os.getenv("EMAIL_USER")
-EMAIL_PASS = os.getenv("EMAIL_PASS")
+EMAIL_PASS = os.getenv("EMAIL_PASS")  # Not used anymore, kept for compatibility
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 OTP_EXPIRY = int(os.getenv("OTP_EXPIRY", 180))  # must be OTP_EXPIRY in .env
+
+# Configure Resend
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
 
 # ---------------- Paths ----------------
 USERS_FILE = os.path.join(BASE_DIR, "..", "db", "users.json")
@@ -51,24 +55,26 @@ def save_users(users):
 
 # ---------------- OTP Helpers ----------------
 def send_email(to_email, subject, message):
-    """Send a simple text email. Uses SMTP settings from env."""
-    if not EMAIL_USER or not EMAIL_PASS:
-        print("❌ Email credentials not configured (EMAIL_USER / EMAIL_PASS missing).")
+    """Send email using Resend API."""
+    if not RESEND_API_KEY:
+        print("❌ RESEND_API_KEY not configured.")
+        return False
+    if not EMAIL_USER:
+        print("❌ EMAIL_USER (from email) not configured.")
         return False
     try:
-        msg = MIMEText(message)
-        msg["Subject"] = subject
-        msg["From"] = EMAIL_USER
-        msg["To"] = to_email
-
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-            server.starttls()
-            server.login(EMAIL_USER, EMAIL_PASS)
-            server.send_message(msg)
-        print(f"📧 Email sent to {to_email}")
+        params = {
+            "from": f"Cloud Storage <{EMAIL_USER}>",
+            "to": [to_email],
+            "subject": subject,
+            "text": message,
+        }
+        resend.Emails.send(params)
+        print(f"📧 Email sent to {to_email} via Resend")
         return True
     except Exception as e:
         print("❌ Email sending failed:", str(e))
+        print(f"⚠️ Unable to send OTP email to {to_email} (check SMTP settings).")
         return False
 
 def save_otp(email, otp_code):
@@ -367,51 +373,39 @@ def cleanup_old_trash():
 # ---------------- Email with attachment ----------------
 def send_email_with_attachment(receiver_email, filename, filepath, password):
     """
-    Send a single email with file attached and a password message body.
-    Returns True on success, False on failure.
+    Send email notification about shared file with password.
+    Note: Resend free tier doesn't support attachments, so we send just the password notification.
     """
-    if not EMAIL_USER or not EMAIL_PASS:
-        print("❌ Email credentials not configured (EMAIL_USER / EMAIL_PASS missing).")
+    if not RESEND_API_KEY:
+        print("❌ RESEND_API_KEY not configured.")
+        return False
+    if not EMAIL_USER:
+        print("❌ EMAIL_USER not configured.")
         return False
 
-    if not os.path.exists(filepath):
-        print(f"❌ Attachment file does not exist: {filepath}")
-        return False
-
-    msg = EmailMessage()
-    msg["From"] = EMAIL_USER
-    msg["To"] = receiver_email
-    msg["Subject"] = f"Shared File: {filename}"
     body = f"""Hello,
 
-You have received a file: {filename}
+You have received a shared file: {filename}
 Password to access it: {password}
 
-Please keep it confidential.
+Please log in to the cloud storage system to download your file.
 
 - Intelligent Cloud File Sharing System
 """
-    msg.set_content(body)
 
-    # Attach the file
     try:
-        with open(filepath, "rb") as f:
-            file_data = f.read()
-            msg.add_attachment(file_data, maintype="application", subtype="octet-stream", filename=filename)
-    except Exception as e:
-        print("❌ Failed to read attachment:", e)
-        return False
-
-    # Send the email
-    try:
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-            server.starttls()
-            server.login(EMAIL_USER, EMAIL_PASS)
-            server.send_message(msg)
-        print(f"📧 Shared file email sent to {receiver_email}")
+        params = {
+            "from": f"Cloud Storage <{EMAIL_USER}>",
+            "to": [receiver_email],
+            "subject": f"Shared File: {filename}",
+            "text": body,
+        }
+        resend.Emails.send(params)
+        print(f"📧 Shared file notification sent to {receiver_email} via Resend")
         return True
     except Exception as e:
-        print("❌ Failed to send email with attachment:", e)
+        print("❌ Failed to send email notification:", e)
+        return False
         return False
 
 # ---------------- Access Logs ----------------
