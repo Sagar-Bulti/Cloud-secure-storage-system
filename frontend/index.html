@@ -3581,10 +3581,22 @@
                 const data = await res.json();
 
                 if (res.ok) {
-                    showToast('OTP sent to your email! 📧', 'success');
-                    document.getElementById('otpEmail').value = email;
-                    document.getElementById('otpEmailDisplay').textContent = email;
-                    switchTab('otp');
+                    // Check if token is returned directly (OTP bypass mode)
+                    if (data.token) {
+                        // Direct login without OTP
+                        localStorage.setItem('token', data.token);
+                        showToast('Login successful! 🎉', 'success');
+                        setTimeout(() => {
+                            window.location.href = '#dashboard';
+                            loadDashboard();
+                        }, 500);
+                    } else {
+                        // Normal OTP flow
+                        showToast('OTP sent to your email! 📧', 'success');
+                        document.getElementById('otpEmail').value = email;
+                        document.getElementById('otpEmailDisplay').textContent = email;
+                        switchTab('otp');
+                    }
                 } else if (data.error === 'account_locked') {
                     // Account is locked
                     showToast(data.message || 'Account temporarily locked', 'error');
