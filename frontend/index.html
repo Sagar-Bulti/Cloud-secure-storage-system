@@ -3268,7 +3268,7 @@
     </div>
 
     <script>
-        const API_URL = 'https://cloud-storage-app-production.up.railway.app/api';
+        const API_URL = 'http://127.0.0.1:5000/api';
 
         // Animation Helper Functions
         function animateOnLoad() {
@@ -3799,6 +3799,7 @@
             e.preventDefault();
 
             const email = document.getElementById('resetEmail').value;
+            const otp = document.getElementById('resetOtpCode').value; // Get OTP from step 2
             const newPassword = document.getElementById('newPassword').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
 
@@ -3836,7 +3837,7 @@
                 const res = await fetch(`${API_URL}/reset-password`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, new_password: newPassword })
+                    body: JSON.stringify({ email, otp, new_password: newPassword })
                 });
 
                 const data = await res.json();
@@ -3897,8 +3898,23 @@
         }
 
         // Handle Logout
-        function handleLogout() {
+        async function handleLogout() {
             if (confirm('Are you sure you want to logout?')) {
+                // Call backend logout endpoint to record access log
+                try {
+                    const token = localStorage.getItem('token');
+                    if (token) {
+                        await fetch(`${API_URL}/logout`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.log('Logout logging failed:', error);
+                }
+                
                 localStorage.clear();
                 document.getElementById('authContainer').style.display = 'block';
                 document.getElementById('dashboard').classList.remove('active');

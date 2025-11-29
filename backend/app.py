@@ -484,23 +484,24 @@ def login():
 
     otp_code = str(random.randint(100000, 999999))
     save_otp(email, otp_code)
-
+    
+    send_email(email, "Your OTP Code", f"Your OTP code is: {otp_code}\n\nValid for 3 minutes.")
     return jsonify({"message": "OTP sent to email"}), 200
 
+# ---------------- Verify OTP ----------------
 @app.route("/api/verify-otp", methods=["POST"])
 def verify_otp_endpoint():
-    data = request.json
+    data = request.get_json()
     email = (data.get("email") or "").strip().lower()
     otp_code = str(data.get("otp") or "").strip()
 
     if not email or not otp_code:
-        return jsonify({"error": "email & otp required"}), 400
+        return jsonify({"error": "email and otp required"}), 400
 
     if not verify_otp(email, otp_code):
         return jsonify({"error": "invalid or expired OTP"}), 401
 
-    delete_otp(email)
-
+    # OTP is valid, generate JWT token
     token = jwt.encode(
         {"sub": email, "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=2)},
         SECRET,
@@ -509,7 +510,22 @@ def verify_otp_endpoint():
     if isinstance(token, bytes):
         token = token.decode("utf-8")
 
-    return jsonify({"token": token})
+    # Record successful login in access log
+    record_access_log("", "login", email)
+
+    return jsonify({"token": token}), 200
+
+# ---------------- Logout ----------------
+@app.route("/api/logout", methods=["POST"])
+def logout():
+    user_email, err_resp, code = get_user_from_token()
+    if err_resp:
+        return err_resp, code
+    
+    # Record logout in access log
+    record_access_log("", "logout", user_email)
+    
+    return jsonify({"message": "Logged out successfully"}), 200
 
 # ---------------- File Upload ----------------
 @app.route("/api/upload", methods=["POST"])
@@ -528,7 +544,6 @@ def upload():
     f.save(filepath)
 
     stored = encrypt_file_and_store(filepath, filename, user_email, folder=folder)
-    record_access_log(filename, "upload", user_email)
     try:
         record_activity(user_email, "upload", filename)
     except Exception:
@@ -696,7 +711,6 @@ def download(filename):
     if not outpath:
         return jsonify({"error": "not found"}), 404
     
-    record_access_log(filename, "download", user_email)
     try:
         record_activity(user_email, "download", filename)
     except Exception:
@@ -894,9 +908,7 @@ def delete_file_route(filename):
     if not success:
         return jsonify({"error": "file not found or not owned by you"}), 404
 
-    record_access_log(filename, "delete", user_email)
-    
-    # Record activity and check for anomalies
+    # Record activity for AI monitoring (also appears in access logs via merged view)
     record_activity(user_email, "delete", filename)
     print(f"✅ Recorded delete activity for {user_email}: {filename}")
     
@@ -1445,10 +1457,9 @@ def access_shared_file(token):
             pass
         return response
 
-    # Record both activity and access log for shared downloads
+    # Record activity for shared downloads
     try:
         record_activity(share.get("owner"), "shared_download", share["original_name"])
-        record_access_log(share["original_name"], "shared_download", share.get("owner"))
     except Exception as e:
         print(f"⚠️ Failed to record shared download: {e}")
 
@@ -1931,7 +1942,6 @@ def bulk_download():
                 if outpath and os.path.exists(outpath):
                     zipf.write(outpath, arcname=filename)
                     temp_paths.append(outpath)
-                    record_access_log(filename, "download", user_email)
                     try:
                         record_activity(user_email, "download", filename)
                     except Exception:

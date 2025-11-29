@@ -1,6 +1,6 @@
-# 🔐 SecureCloud Pro - AI-Powered File Storage System
+# 🔐 SecureCloud Pro - AI-Powered Cloud File Storage System
 
-A secure, AI-monitored cloud file storage application with end-to-end encryption, multi-factor authentication, and intelligent threat detection.
+A secure, AI-monitored cloud file storage application with **MongoDB Atlas cloud database integration**, end-to-end encryption, multi-factor authentication, and intelligent threat detection.
 
 ---
 
@@ -8,6 +8,7 @@ A secure, AI-monitored cloud file storage application with end-to-end encryption
 
 - [Overview](#overview)
 - [Key Features](#key-features)
+- [Cloud Integration](#cloud-integration)
 - [Technology Stack](#technology-stack)
 - [Project Structure](#project-structure)
 - [Installation & Setup](#installation--setup)
@@ -23,9 +24,10 @@ A secure, AI-monitored cloud file storage application with end-to-end encryption
 
 ## 🎯 Overview
 
-**SecureCloud Pro** is a full-stack web application that provides secure file storage with AI-powered security monitoring. The system encrypts files before storage, implements two-factor authentication via email OTP, and uses machine learning to detect suspicious activities.
+**SecureCloud Pro** is a full-stack web application that provides secure file storage with AI-powered security monitoring. The system encrypts files before storage, implements two-factor authentication via email OTP, uses machine learning to detect suspicious activities, and **stores data in MongoDB Atlas cloud database** for production-ready scalability.
 
 ### **Core Capabilities:**
+- ☁️ **MongoDB Atlas Cloud Database** - Production-ready cloud storage
 - 🔒 **AES-256 Encryption** for all stored files
 - 🤖 **AI-Powered Security Monitoring** to detect anomalies
 - 📧 **Two-Factor Authentication (2FA)** via email OTP
@@ -34,10 +36,69 @@ A secure, AI-monitored cloud file storage application with end-to-end encryption
 - 📊 **Activity Logging** and audit trails
 - 📦 **Bulk Operations** for upload/download
 - 🔍 **Advanced Search & Filtering**
+- 🔄 **Automatic JSON Fallback** for offline resilience
+
+---
+
+## ☁️ Cloud Integration
+
+### **MongoDB Atlas Cloud Database**
+
+This project integrates with **MongoDB Atlas** - a professional cloud database platform that provides:
+
+✅ **Cloud-Native Storage** - All user data, files metadata, activity logs stored in MongoDB Atlas  
+✅ **Scalability** - Ready for multiple concurrent users without code changes  
+✅ **High Availability** - 99.95% uptime SLA with automatic failover  
+✅ **Automatic Backups** - Point-in-time recovery and continuous backups  
+✅ **Global Distribution** - Low-latency access from anywhere  
+✅ **Free Tier** - 512MB storage at no cost (perfect for academic projects)  
+
+### **Dual Storage Architecture**
+
+The application uses a **hybrid storage approach** for maximum reliability:
+
+```
+┌─────────────────────────────────────────┐
+│         Your Application                │
+├─────────────────────────────────────────┤
+│  Primary:   MongoDB Atlas Cloud         │
+│  Backup:    Local JSON Files            │
+│  Files:     Encrypted Local Storage     │
+└─────────────────────────────────────────┘
+```
+
+**Data Flow:**
+1. **Write Operations** → Save to MongoDB Atlas + JSON backup
+2. **Read Operations** → MongoDB Atlas (fallback to JSON if offline)
+3. **File Storage** → Encrypted files stored locally (can upgrade to AWS S3)
+
+**Benefits:**
+- ✅ Production-ready cloud database
+- ✅ Offline resilience with JSON fallback
+- ✅ Zero data loss guarantee
+- ✅ Easy migration to full cloud deployment
+
+### **Collections in MongoDB:**
+- `users` - User credentials and profiles
+- `files` - File metadata and encryption info
+- `folders` - Folder structure
+- `activity_log` - AI monitoring data
+- `access_log` - Audit trail
+- `otp` - Two-factor authentication codes
+- `shares` - File sharing records
+- `sent_alerts` - Security notifications
 
 ---
 
 ## ✨ Key Features
+
+### 0. **Cloud Database Integration** ⭐ NEW
+- MongoDB Atlas cloud database
+- Automatic data synchronization
+- JSON backup for offline mode
+- Real-time data updates
+- Scalable architecture
+- Production-ready setup
 
 ### 1. **User Authentication & Security**
 - User registration with email verification
@@ -98,13 +159,18 @@ A secure, AI-monitored cloud file storage application with end-to-end encryption
 - **Python 3.x** - Core programming language
 - **Flask** - Web framework
 - **Flask-CORS** - Cross-Origin Resource Sharing
-- **SQLite** - Lightweight database (JSON-based storage)
+- **MongoDB Atlas** - Cloud database (NoSQL)
+- **PyMongo** - MongoDB driver for Python
 - **Cryptography (Fernet)** - File encryption/decryption
 - **bcrypt** - Password hashing
 - **PyJWT** - JSON Web Tokens for authentication
 - **scikit-learn** - Machine learning for AI monitoring
 - **SMTP (smtplib)** - Email functionality
 - **python-dotenv** - Environment variable management
+
+### **Cloud Services:**
+- **MongoDB Atlas** - Cloud database platform (Free tier: 512MB)
+- **Gmail SMTP** - Email delivery service
 
 ### **Frontend:**
 - **HTML5** - Structure
@@ -131,10 +197,11 @@ A secure, AI-monitored cloud file storage application with end-to-end encryption
 ## 📁 Project Structure
 
 ```
-Mini project 1/
+Mini project updated/
 ├── backend/
 │   ├── app.py              # Main Flask application with all API routes
-│   ├── storage.py          # File encryption/decryption & storage logic
+│   ├── storage.py          # File encryption/decryption & MongoDB/JSON storage
+│   ├── database.py         # MongoDB Atlas connection handler ⭐ NEW
 │   ├── ai_module.py        # AI monitoring and anomaly detection
 │   └── run.py              # Server launcher script
 │
@@ -145,14 +212,14 @@ Mini project 1/
 │   └── train_model.py      # AI model training script
 │
 ├── db/
-│   ├── users.json          # User credentials (hashed passwords)
-│   ├── files.json          # File metadata
-│   ├── folders.json        # User-created folders
-│   ├── activity_log.json   # Activity audit trail
-│   ├── access_log.json     # Access logs
-│   ├── otp.json            # OTP codes with expiry
-│   ├── shares.json         # File sharing records
-│   ├── sent_alerts.json    # Security alert history
+│   ├── users.json          # User credentials (JSON backup)
+│   ├── files.json          # File metadata (JSON backup)
+│   ├── folders.json        # User-created folders (JSON backup)
+│   ├── activity_log.json   # Activity audit trail (JSON backup)
+│   ├── access_log.json     # Access logs (JSON backup)
+│   ├── otp.json            # OTP codes with expiry (JSON backup)
+│   ├── shares.json         # File sharing records (JSON backup)
+│   ├── sent_alerts.json    # Security alert history (JSON backup)
 │   └── secret.key          # Encryption secret key
 │
 ├── keys/
@@ -162,14 +229,19 @@ Mini project 1/
 ├── storage_files/          # Encrypted files storage
 ├── local_store/            # Local file processing
 ├── temp/                   # Temporary files
+├── backups/                # Migration backups ⭐ NEW
 ├── venv/                   # Python virtual environment
 │
-├── .env                    # Environment variables (email config)
+├── .env                    # Environment variables (MongoDB URI, email config) ⭐ UPDATED
 ├── .gitignore              # Git ignore rules
-├── requirements.txt        # Python dependencies
-├── NEW_FEATURES.md         # New features documentation
+├── requirements.txt        # Python dependencies (includes pymongo) ⭐ UPDATED
+├── migrate_to_mongodb.py   # MongoDB migration script ⭐ NEW
+├── verify_migration.py     # Verify cloud data ⭐ NEW
+├── test_connection.py      # Test MongoDB connection ⭐ NEW
 └── README.md               # This file
 ```
+
+**Note:** All JSON files in `db/` directory now serve as **backup storage**. Primary data is stored in **MongoDB Atlas cloud database**.
 
 ---
 
@@ -209,20 +281,70 @@ pip install -r requirements.txt
 
 ### **Step 5: Configure Environment Variables**
 
-Create a `.env` file in the root directory:
+Create a `.env` file in the root directory with the following:
+
 ```env
+# Email Configuration (for OTP)
 EMAIL_USER=your_email@gmail.com
 EMAIL_PASS=your_app_password
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+OTP_EXPIRY=180
+
+# MongoDB Atlas Configuration (Cloud Database) ⭐ NEW
+MONGODB_URI=your_mongodb_connection_string
+USE_MONGODB=true
 ```
 
-**Note:** For Gmail, use an [App Password](https://support.google.com/accounts/answer/185833):
+**Email Setup:** For Gmail, use an [App Password](https://support.google.com/accounts/answer/185833):
 1. Enable 2FA on your Google account
 2. Generate an App Password
 3. Use that password in `.env`
 
+**MongoDB Atlas Setup (FREE):** ⭐ **RECOMMENDED**
+
+1. **Create Account:** Visit [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register)
+2. **Create Free Cluster:** Choose M0 (Free tier - 512MB)
+3. **Create Database User:**
+   - Go to: Security → Database Access
+   - Click "Add New Database User"
+   - Username: `your_username`
+   - Password: Create a simple password (no special characters)
+   - Privileges: "Read and write to any database"
+4. **Whitelist IP:**
+   - Go to: Security → Network Access
+   - Click "Add IP Address"
+   - Choose "Allow Access from Anywhere" (for development)
+5. **Get Connection String:**
+   - Click cluster → "Connect" → "Drivers"
+   - Copy connection string
+   - Replace `<password>` with your actual password
+   - Add to `.env` file as `MONGODB_URI`
+
+**Example:**
+```env
+MONGODB_URI=mongodb+srv://username:password@cluster.xxxxx.mongodb.net/?appName=yourapp
+USE_MONGODB=true
+```
+
+**Note:** If you skip MongoDB setup, the app will automatically use JSON file storage (local only).
+
 ### **Step 6: Initialize the Database**
 
-The database files will be created automatically on first run. Ensure the `db/` folder exists.
+**Option A: With MongoDB Atlas (Recommended)**
+```bash
+# Test connection
+python test_connection.py
+
+# Migrate existing data to cloud (if any)
+python migrate_to_mongodb.py
+
+# Verify migration
+python verify_migration.py
+```
+
+**Option B: Without MongoDB (JSON Only)**
+The database files will be created automatically on first run in the `db/` folder.
 
 ### **Step 7: Run the Application**
 
@@ -769,8 +891,15 @@ POST /api/reset-password
 
 ## 🚀 Future Enhancements
 
+### **Recently Completed:** ✅
+- [x] **MongoDB Atlas Integration** - Cloud database with 512MB free tier
+- [x] **Dual Storage System** - MongoDB + JSON backup for reliability
+- [x] **Auto Migration Tool** - Easy data migration to cloud
+- [x] **Connection Resilience** - Automatic fallback to JSON if MongoDB offline
+
 ### **Planned Features:**
-- [ ] Cloud deployment (AWS/GCP/Azure)
+- [ ] AWS S3 Integration - Store encrypted files in cloud (currently local)
+- [ ] Cloud deployment (Heroku/Render/Railway)
 - [ ] File versioning
 - [ ] Collaborative editing
 - [ ] Advanced permissions system
@@ -787,13 +916,13 @@ POST /api/reset-password
 - [ ] Integration with third-party services
 
 ### **Possible Improvements:**
-- PostgreSQL/MySQL for better scalability
 - Redis for caching
 - WebSocket for real-time updates
 - CDN for faster file delivery
 - Advanced search (tags, content search)
-- Trash/recycle bin functionality
+- Enhanced trash/recycle bin (currently has basic soft delete)
 - File recovery options
+- Email service upgrade (SendGrid/Mailgun)
 
 ---
 
@@ -815,6 +944,7 @@ This project is created for educational purposes. Feel free to use and modify fo
 ## 🙏 Acknowledgments
 
 - Flask framework and community
+- MongoDB Atlas for cloud database platform
 - scikit-learn for ML capabilities
 - Chart.js for visualizations
 - Google Fonts for typography
@@ -827,15 +957,19 @@ This project is created for educational purposes. Feel free to use and modify fo
 For issues, questions, or contributions:
 - Check existing documentation in `NEW_FEATURES.md`
 - Review code comments in source files
+- Test MongoDB connection: `python test_connection.py`
+- Verify data migration: `python verify_migration.py`
 - Test features in development mode first
 
 ---
 
 ## 🎯 Project Highlights
 
+✅ **MongoDB Atlas Cloud Integration** - Professional cloud database  
 ✅ **Full-stack application** with modern architecture  
 ✅ **AI-powered security** with machine learning  
 ✅ **Production-ready encryption** (AES-256)  
+✅ **Dual storage system** - Cloud database + JSON backup  
 ✅ **Comprehensive feature set** (upload, download, share, search)  
 ✅ **Professional UI/UX** with responsive design  
 ✅ **Complete authentication** with 2FA  

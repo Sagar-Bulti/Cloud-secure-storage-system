@@ -1,26 +1,30 @@
-import os, json, datetime
+import os, json, datetime, smtplib
 from cryptography.fernet import Fernet
+from email.mime.text import MIMEText
 from dotenv import load_dotenv
+from email.message import EmailMessage
+
+# MongoDB integration
+try:
+    from database import (
+        is_mongodb_available, get_collection,
+        USERS_COLLECTION, FILES_COLLECTION, OTP_COLLECTION, ACCESS_LOG_COLLECTION
+    )
+    MONGODB_ENABLED = True
+except ImportError:
+    MONGODB_ENABLED = False
+    print("⚠️ MongoDB module not available - using JSON only")
+
 
 # ---------------- Load Environment ----------------
 BASE_DIR = os.path.dirname(__file__)   # define BASE_DIR again
 load_dotenv()  # loads .env from project root automatically
 
 EMAIL_USER = os.getenv("EMAIL_USER")
-EMAIL_PASS = os.getenv("EMAIL_PASS")  # Not used anymore, kept for compatibility
-RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 OTP_EXPIRY = int(os.getenv("OTP_EXPIRY", 180))  # must be OTP_EXPIRY in .env
-
-# Import and configure Resend only if needed
-try:
-    import resend
-    if RESEND_API_KEY:
-        resend.api_key = RESEND_API_KEY
-except ImportError:
-    resend = None
-    print("⚠️ Resend package not installed")
 
 # ---------------- Paths ----------------
 USERS_FILE = os.path.join(BASE_DIR, "..", "db", "users.json")
@@ -42,7 +46,25 @@ os.makedirs(TEMP_STORE, exist_ok=True)
 
 # ---------------- User Helpers ----------------
 def load_users():
-    """Load users map from JSON file. Returns {} if not present."""
+    """Load users map from MongoDB or JSON file. Returns {} if not present."""
+    # Try MongoDB first
+    if MONGODB_ENABLED and is_mongodb_available():
+        try:
+            collection = get_collection(USERS_COLLECTION)
+            if collection is not None:
+                users = {}
+                for doc in collection.find():
+                    key = doc.get('_key')
+                    if key:
+                        # Reconstruct user dict without MongoDB _id
+                        user_data = {k: v for k, v in doc.items() if k not in ['_id', '_key']}
+                        users[key] = user_data
+                print(f"✅ Loaded {len(users)} users from MongoDB")
+                return users
+        except Exception as e:
+            print(f"⚠️ MongoDB read error: {e}, falling back to JSON")
+    
+    # Fallback to JSON
     if not os.path.exists(USERS_FILE):
         with open(USERS_FILE, "w", encoding="utf-8") as f:
             json.dump({}, f)
@@ -53,31 +75,50 @@ def load_users():
             return {}
 
 def save_users(users):
+    """Save users to both MongoDB and JSON file."""
+    # Save to JSON (backup)
     with open(USERS_FILE, "w", encoding="utf-8") as f:
         json.dump(users, f, indent=2)
+    
+    # Save to MongoDB if available
+    if MONGODB_ENABLED and is_mongodb_available():
+        try:
+            collection = get_collection(USERS_COLLECTION)
+            if collection is not None:
+                # Clear and repopulate
+                collection.delete_many({})
+                documents = []
+                for key, value in users.items():
+                    doc = value.copy() if isinstance(value, dict) else {'value': value}
+                    doc['_key'] = key
+                    documents.append(doc)
+                if documents:
+                    collection.insert_many(documents)
+                    print(f"✅ Saved {len(documents)} users to MongoDB")
+        except Exception as e:
+            print(f"⚠️ MongoDB write error: {e}")
+
 
 # ---------------- OTP Helpers ----------------
 def send_email(to_email, subject, message):
-    """Send email using Resend API."""
-    if not RESEND_API_KEY:
-        print("❌ RESEND_API_KEY not configured.")
-        return False
-    if not EMAIL_USER:
-        print("❌ EMAIL_USER (from email) not configured.")
+    """Send a simple text email. Uses SMTP settings from env."""
+    if not EMAIL_USER or not EMAIL_PASS:
+        print("❌ Email credentials not configured (EMAIL_USER / EMAIL_PASS missing).")
         return False
     try:
-        params = {
-            "from": f"Cloud Storage <{EMAIL_USER}>",
-            "to": [to_email],
-            "subject": subject,
-            "text": message,
-        }
-        resend.Emails.send(params)
-        print(f"📧 Email sent to {to_email} via Resend")
+        msg = MIMEText(message)
+        msg["Subject"] = subject
+        msg["From"] = EMAIL_USER
+        msg["To"] = to_email
+
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+            server.starttls()
+            server.login(EMAIL_USER, EMAIL_PASS)
+            server.send_message(msg)
+        print(f"📧 Email sent to {to_email}")
         return True
     except Exception as e:
         print("❌ Email sending failed:", str(e))
-        print(f"⚠️ Unable to send OTP email to {to_email} (check SMTP settings).")
         return False
 
 def save_otp(email, otp_code):
@@ -164,7 +205,24 @@ fernet = init_keys()
 
 # ---------------- File Metadata ----------------
 def load_metadata():
-    """Return metadata dict stored in META_FILE (create if missing)."""
+    """Return metadata dict stored in MongoDB or META_FILE (create if missing)."""
+    # Try MongoDB first
+    if MONGODB_ENABLED and is_mongodb_available():
+        try:
+            collection = get_collection(FILES_COLLECTION)
+            if collection is not None:
+                metadata = {}
+                for doc in collection.find():
+                    key = doc.get('_key')
+                    if key:
+                        # Reconstruct metadata dict without MongoDB _id
+                        file_data = {k: v for k, v in doc.items() if k not in ['_id', '_key']}
+                        metadata[key] = file_data
+                return metadata
+        except Exception as e:
+            print(f"⚠️ MongoDB read error: {e}, falling back to JSON")
+    
+    # Fallback to JSON
     os.makedirs(os.path.dirname(META_FILE), exist_ok=True)
     if not os.path.exists(META_FILE):
         with open(META_FILE, "w", encoding="utf-8") as f:
@@ -176,9 +234,28 @@ def load_metadata():
             return {}
 
 def save_metadata(data):
+    """Save metadata to both MongoDB and JSON file."""
+    # Save to JSON (backup)
     os.makedirs(os.path.dirname(META_FILE), exist_ok=True)
     with open(META_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+    
+    # Save to MongoDB if available
+    if MONGODB_ENABLED and is_mongodb_available():
+        try:
+            collection = get_collection(FILES_COLLECTION)
+            if collection is not None:
+                # Clear and repopulate
+                collection.delete_many({})
+                documents = []
+                for key, value in data.items():
+                    doc = value.copy() if isinstance(value, dict) else {'value': value}
+                    doc['_key'] = key
+                    documents.append(doc)
+                if documents:
+                    collection.insert_many(documents)
+        except Exception as e:
+            print(f"⚠️ MongoDB write error: {e}")
 
 # ---------------- File Handling ----------------
 def encrypt_file_and_store(filepath, filename, user_email, folder="/"):
@@ -376,39 +453,51 @@ def cleanup_old_trash():
 # ---------------- Email with attachment ----------------
 def send_email_with_attachment(receiver_email, filename, filepath, password):
     """
-    Send email notification about shared file with password.
-    Note: Resend free tier doesn't support attachments, so we send just the password notification.
+    Send a single email with file attached and a password message body.
+    Returns True on success, False on failure.
     """
-    if not RESEND_API_KEY:
-        print("❌ RESEND_API_KEY not configured.")
-        return False
-    if not EMAIL_USER:
-        print("❌ EMAIL_USER not configured.")
+    if not EMAIL_USER or not EMAIL_PASS:
+        print("❌ Email credentials not configured (EMAIL_USER / EMAIL_PASS missing).")
         return False
 
+    if not os.path.exists(filepath):
+        print(f"❌ Attachment file does not exist: {filepath}")
+        return False
+
+    msg = EmailMessage()
+    msg["From"] = EMAIL_USER
+    msg["To"] = receiver_email
+    msg["Subject"] = f"Shared File: {filename}"
     body = f"""Hello,
 
-You have received a shared file: {filename}
+You have received a file: {filename}
 Password to access it: {password}
 
-Please log in to the cloud storage system to download your file.
+Please keep it confidential.
 
 - Intelligent Cloud File Sharing System
 """
+    msg.set_content(body)
 
+    # Attach the file
     try:
-        params = {
-            "from": f"Cloud Storage <{EMAIL_USER}>",
-            "to": [receiver_email],
-            "subject": f"Shared File: {filename}",
-            "text": body,
-        }
-        resend.Emails.send(params)
-        print(f"📧 Shared file notification sent to {receiver_email} via Resend")
+        with open(filepath, "rb") as f:
+            file_data = f.read()
+            msg.add_attachment(file_data, maintype="application", subtype="octet-stream", filename=filename)
+    except Exception as e:
+        print("❌ Failed to read attachment:", e)
+        return False
+
+    # Send the email
+    try:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+            server.starttls()
+            server.login(EMAIL_USER, EMAIL_PASS)
+            server.send_message(msg)
+        print(f"📧 Shared file email sent to {receiver_email}")
         return True
     except Exception as e:
-        print("❌ Failed to send email notification:", e)
-        return False
+        print("❌ Failed to send email with attachment:", e)
         return False
 
 # ---------------- Access Logs ----------------
@@ -424,27 +513,8 @@ def record_access_log(filename, action, user_email, meta=None):
             "timestamp": ISO8601 string,
             "meta": dict (optional additional metadata)
         }
-    
-    Creates backup before first write if log file exists.
     """
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-    
-    # Create backup on first modification (if file exists and no backup yet)
-    backup_dir = os.path.join(BASE_DIR, "..", "db")
-    if os.path.exists(LOG_FILE):
-        # Check if we need to create a backup (create one per session)
-        timestamp_str = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        backup_path = os.path.join(backup_dir, f"access_log_backup_{timestamp_str}.json")
-        
-        # Only create backup if one doesn't exist for this second (prevents multiple backups)
-        existing_backups = [f for f in os.listdir(backup_dir) if f.startswith("access_log_backup_")]
-        if not existing_backups or not os.path.exists(backup_path):
-            try:
-                import shutil
-                shutil.copy2(LOG_FILE, backup_path)
-                print(f"📋 Created backup: {backup_path}")
-            except Exception as e:
-                print(f"⚠️ Backup creation failed: {e}")
     
     data = []
     if os.path.exists(LOG_FILE):
